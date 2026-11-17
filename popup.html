@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ASCII Flow</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+<main>
+  <div class="eyebrow">INTERACTIVE OVERLAY</div>
+  <h1>ASCII<span>FLOW</span></h1>
+  <p class="sub">Make your browser feel alive.</p>
+  <div class="toggle-row"><div><strong>ASCII field</strong><small id="status">Loading…</small></div><label class="switch"><input id="toggle" type="checkbox"><span class="slider"></span></label></div>
+
+  <section class="preview-section">
+    <div class="section-head"><label class="section-label">LIVE PREVIEW</label><span class="live-tag">● LIVE</span></div>
+    <div class="preview-wrap">
+      <canvas id="preview" width="320" height="320" aria-label="Preview of your ASCII trail"></canvas>
+      <div class="preview-caption">Your trail, before it hits the browser</div>
+    </div>
+  </section>
+
+  <section>
+    <label class="section-label">PICK A VIBE</label>
+    <div class="theme-grid" id="themeGrid">
+      <button class="theme-card" data-theme="aurora"><span class="swatches"><i style="--c:#2df5ff"></i><i style="--c:#ff4ecd"></i><i style="--c:#a55aff"></i></span><b>Neon Aurora</b></button>
+      <button class="theme-card" data-theme="cyber"><span class="swatches"><i style="--c:#7dff82"></i><i style="--c:#32e1ff"></i><i style="--c:#7d6eff"></i></span><b>Cyber Mint</b></button>
+      <button class="theme-card" data-theme="sunset"><span class="swatches"><i style="--c:#ffc341"></i><i style="--c:#ff5591"></i><i style="--c:#b964ff"></i></span><b>Solar Flare</b></button>
+      <button class="theme-card" data-theme="ice"><span class="swatches"><i style="--c:#e1ffff"></i><i style="--c:#5ad2ff"></i><i style="--c:#7d8cff"></i></span><b>Arctic Pulse</b></button>
+      <button class="theme-card" data-theme="synth"><span class="swatches"><i style="--c:#ff46f5"></i><i style="--c:#824bff"></i><i style="--c:#372896"></i></span><b>Synthwave</b></button>
+      <button class="theme-card" data-theme="toxic"><span class="swatches"><i style="--c:#d2ff28"></i><i style="--c:#5aff73"></i><i style="--c:#009b78"></i></span><b>Toxic Bloom</b></button>
+      <button class="theme-card" data-theme="ocean"><span class="swatches"><i style="--c:#32f5dc"></i><i style="--c:#1e96ff"></i><i style="--c:#374bd2"></i></span><b>Deep Ocean</b></button>
+      <button class="theme-card" data-theme="ember"><span class="swatches"><i style="--c:#fff582"></i><i style="--c:#ff7d28"></i><i style="--c:#eb2d5a"></i></span><b>Ember Glow</b></button>
+    </div>
+  </section>
+
+  <section class="audio-panel">
+    <div class="section-head"><label class="section-label">AUDIO REACTIVE MODE</label><span class="audio-dot" id="audioDot">● OFF</span></div>
+    <p class="audio-copy">Let the ASCII field dance to the sound in this tab. Playback stays audible.</p>
+    <button id="audioToggle" class="audio-button" type="button">♫ ENABLE AUDIO REACTION</button>
+    <small id="audioStatus" class="audio-status">Capture starts only when you press the button.</small>
+    <small class="audio-fixed">Sensitivity 100% · Beat / bass impact 30% · Fixed</small>
+  </section>
+  <section class="custom">
+    <div class="section-head"><label class="section-label">MAKE YOUR OWN TRAIL</label><button id="reset" class="reset" type="button">RESET</button></div>
+    <label class="range-label">Trail size <output id="sizeOut">100%</output></label><input id="trailSize" type="range" min="60" max="150" step="5">
+    <label class="range-label">Trail lifetime <output id="durationOut">1.05s</output></label><input id="trailDuration" type="range" min="350" max="2200" step="50">
+    <label class="range-label">Glow intensity <output id="glowOut">70%</output></label><input id="glow" type="range" min="20" max="120" step="5">
+    <div class="colors">
+      <label>Core <input id="coreColor" type="color"></label>
+      <label>Middle <input id="midColor" type="color"></label>
+      <label>Outer <input id="edgeColor" type="color"></label>
+    </div>
+    <button id="applyColors" class="apply" type="button">USE MY COLOURS</button>
+  </section>
+  <div class="tips"><div><b>MOVE</b> Neon trail follows your cursor</div><div><b>CLICK</b> Expanding ripple effect</div><div><b>ESC</b> Instantly switch the overlay off</div></div>
+  <footer>ASCII FLOW <i>•</i> v2.9.1</footer>
+</main><script src="popup.js"></script>
+</body></html>
