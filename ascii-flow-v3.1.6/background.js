@@ -19,6 +19,7 @@ async function ensureOffscreen() {
 async function stopCapture() {
   stopping = true;
   try { await chrome.runtime.sendMessage({ target: "offscreen", type: "STOP_CAPTURE" }); } catch (_) {}
+  if (capturedTabId !== null) chrome.tabs.sendMessage(capturedTabId, { type: "AUDIO_CAPTURE_ENDED" }).catch(() => {});
   capturedTabId = null;
   chrome.storage.local.set({ asciiFlowAudioActive: false });
   stopping = false;
@@ -31,15 +32,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab?.id) throw new Error("No active tab found.");
+        // Existing tabs may predate extension reload/install; inject the content
+        // script now so audio visuals start without requiring a page refresh.
+        try {
+          await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
+        } catch (injectError) {
+          // Already-injected pages are guarded by the content script's singleton.
+          if (!String(injectError?.message || "").includes("Cannot access")) throw injectError;
+        }
         const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
         await ensureOffscreen();
         capturedTabId = tab.id;
         await chrome.runtime.sendMessage({
           target: "offscreen", type: "START_CAPTURE", streamId, tabId: tab.id
         });
+        chrome.tabs.sendMessage(tab.id, { type: "AUDIO_CAPTURE_STARTED" }).catch(() => {});
         chrome.storage.local.set({ asciiFlowAudioActive: true });
         sendResponse({ ok: true });
       } catch (error) {
+        if (capturedTabId !== null) {
+          chrome.tabs.sendMessage(capturedTabId, { type: "AUDIO_CAPTURE_ENDED" }).catch(() => {});
+          capturedTabId = null;
+        }
+        chrome.storage.local.set({ asciiFlowAudioActive: false });
         sendResponse({ ok: false, error: error?.message || "Could not start audio capture." });
       }
     })();
@@ -65,4 +80,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.set({ asciiFlowAudioActive: false });
   }
   return false;
+});
+
+
+chrome.commands.onCommand.addListener(async command => {
+  if (command !== "toggle-ascii-flow") return;
+  const data = await chrome.storage.local.get({ asciiFlowEnabled: true });
+  await chrome.storage.local.set({ asciiFlowEnabled: !data.asciiFlowEnabled });
 });

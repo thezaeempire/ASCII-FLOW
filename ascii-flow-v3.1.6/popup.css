@@ -2,3 +2,5 @@
 .audio-panel{padding:12px;border:1px solid #4a3260;border-radius:9px;background:linear-gradient(145deg,#1b1026,#100d17);margin-top:16px}.audio-dot{font-size:8px;letter-spacing:1px;color:#8c8198}.audio-dot.on{color:#63e8ce}.audio-copy{font-size:10px;line-height:1.45;color:#9b93a5;margin:0 0 10px}.audio-button{width:100%;padding:11px 9px;border:1px solid #7e4eaa;border-radius:7px;background:linear-gradient(100deg,#38204d,#182d40);color:#f3e8ff;font-size:10px;font-weight:850;letter-spacing:1px;cursor:pointer}.audio-button:hover{filter:brightness(1.2)}.audio-button.active{border-color:#49d7bd;background:linear-gradient(100deg,#143b3b,#241b43)}.audio-status{display:block;color:#8b8495;font-size:9px;line-height:1.4;margin-top:7px}
 
 
+
+.mode-note{margin:-12px 0 12px;color:#777181;font-size:9px;letter-spacing:.15px}

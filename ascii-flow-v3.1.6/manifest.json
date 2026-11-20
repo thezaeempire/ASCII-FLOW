@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "ASCII Flow",
-  "version": "2.9.1",
-  "description": "ASCII Flow with a bottom-aligned horizontal ASCII audio waveform.",
+  "version": "3.1.6",
+  "description": "Responsive ASCII cursor effects with audio-reactive visuals.",
   "permissions": [
     "offscreen",
     "tabCapture",
     "tabs",
-    "storage"
+    "storage",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -39,5 +40,13 @@
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+  "commands": {
+    "toggle-ascii-flow": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+1"
+      },
+      "description": "Toggle ASCII Flow on or off"
+    }
   }
 }

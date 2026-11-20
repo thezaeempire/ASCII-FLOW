@@ -69,7 +69,7 @@ function drawPreview(){
   ctx.globalAlpha=1;ctx.shadowBlur=0;
 }
 function updateThemeCards(){document.querySelectorAll(".theme-card").forEach(c=>c.classList.toggle("active",!settings.customColors&&c.dataset.theme===themeName));}
-function updateStatus(){status.textContent=toggle.checked?"Running · ESC to pause":"Paused";}
+function updateStatus(){status.textContent=toggle.checked?"Running · Ctrl+1 to toggle":"Paused · Ctrl+1 to toggle";}
 function updateAudioUI(){
   $("audioToggle").textContent=audioBusy?"STARTING…":audioOn?"Ⅱ STOP AUDIO REACTION":"♫ ENABLE AUDIO REACTION";
   $("audioToggle").classList.toggle("active",audioOn);

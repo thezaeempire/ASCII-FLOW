@@ -6,7 +6,7 @@
   Object.assign(canvas.style, {
     position: "fixed", inset: "0", width: "100vw", height: "100vh",
     zIndex: "2147483646", pointerEvents: "none", opacity: "1",
-    transition: "opacity 280ms ease", mixBlendMode: "screen"
+    transition: "opacity 280ms ease", mixBlendMode: "normal"
   });
   (document.documentElement || document.body).appendChild(canvas);
   const ctx = canvas.getContext("2d", { alpha: true, desynchronized: true });
@@ -37,6 +37,7 @@
   let settings = { trailSize: 100, trailDuration: 1050, glow: 70, customColors: false,
     coreColor: "#2df5ff", midColor: "#ff4ecd", edgeColor: "#a55aff" };
   let grid = [], trail = [], lastPointer = null, bursts = [];
+  let scrollParticles = [];
   let coreField = new Float32Array(0), midField = new Float32Array(0), edgeField = new Float32Array(0);
   let dirty = true;
   let audioActive = false;
@@ -72,6 +73,45 @@
       mid: hexRgb(settings.midColor) || base.mid, edge: hexRgb(settings.edgeColor) || base.edge };
   }
 
+  let pageIsLight = false;
+  let lastToneCheck = 0;
+  function detectPageTone(now = performance.now()) {
+    if (now - lastToneCheck < 900) return;
+    lastToneCheck = now;
+    let node = document.elementFromPoint(Math.min(innerWidth - 1, innerWidth / 2), Math.min(innerHeight - 1, innerHeight / 2));
+    let background = null;
+    while (node && node !== document.documentElement) {
+      const value = getComputedStyle(node).backgroundColor;
+      const match = value.match(/rgba?\(([^)]+)\)/i);
+      if (match) {
+        const parts = match[1].split(/[,\s/]+/).filter(Boolean).map(Number);
+        if (parts.length >= 3 && (parts.length < 4 || parts[3] > 0.08)) {
+          background = parts.slice(0, 3);
+          break;
+        }
+      }
+      node = node.parentElement;
+    }
+    if (!background) {
+      const value = getComputedStyle(document.documentElement).backgroundColor;
+      const match = value.match(/rgba?\(([^)]+)\)/i);
+      if (match) background = match[1].split(/[,\s/]+/).filter(Boolean).slice(0, 3).map(Number);
+    }
+    if (background && background.length === 3) {
+      const luminance = (0.2126 * background[0] + 0.7152 * background[1] + 0.0722 * background[2]);
+      pageIsLight = luminance >= 145;
+    } else {
+      pageIsLight = window.matchMedia?.('(prefers-color-scheme: light)').matches || false;
+    }
+  }
+  function displayTheme(now) {
+    const base = activeTheme();
+    detectPageTone(now);
+    if (!pageIsLight) return base;
+    const invert = color => color.map(channel => 255 - channel);
+    return { core: invert(base.core), mid: invert(base.mid), edge: invert(base.edge), idle: invert(base.idle) };
+  }
+
   function buildGrid() {
     cols = Math.ceil(width / cellW) + 1;
     rows = Math.ceil(height / cellH) + 1;
@@ -100,7 +140,7 @@
   }
 
   function drawIdle() {
-    const theme = activeTheme();
+    const theme = displayTheme(performance.now());
     ctx.clearRect(0, 0, width, height);
     ctx.font = "900 21px 'Arial Rounded MT Bold', 'Trebuchet MS', monospace";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -140,8 +180,20 @@
   });
 
   chrome.runtime.onMessage.addListener(message => {
-    if (message?.type === "AUDIO_LEVELS") {
+    if (message?.type === "AUDIO_CAPTURE_STARTED") {
       audioActive = true;
+      trail.length = 0;
+      bursts.length = 0;
+      lastPointer = null;
+      dirty = true;
+      schedule();
+    } else if (message?.type === "AUDIO_LEVELS") {
+      if (!audioActive) {
+        audioActive = true;
+        trail.length = 0;
+        bursts.length = 0;
+        lastPointer = null;
+      }
       audioData = {
         volume: Math.min(1, message.volume || 0),
         bass: Math.min(1, message.bass || 0),
@@ -228,6 +280,7 @@
   }
 
   function addTrail(x, y, now) {
+    if (!enabled || audioActive) return;
     if (lastPointer) {
       const dx = x - lastPointer.x, dy = y - lastPointer.y;
       const steps = Math.min(12, Math.max(1, Math.ceil(Math.hypot(dx, dy) / 10)));
@@ -242,17 +295,45 @@
   }
   addEventListener("pointermove", e => addTrail(e.clientX, e.clientY, performance.now()), { passive: true });
   addEventListener("pointerdown", e => {
-    if (!enabled || e.button !== 0) return;
+    if (!enabled || audioActive || e.button !== 0) return;
     bursts.push({ x: e.clientX, y: e.clientY, time: performance.now() });
     if (bursts.length > 3) bursts.shift();
     schedule();
   }, { passive: true });
+  addEventListener("wheel", e => {
+    if (!enabled || audioActive) return;
+    const now = performance.now();
+    const direction = Math.sign(e.deltaY);
+    if (!direction) return;
+    // Scroll down: a few particles rise from the bottom.
+    // Scroll up: a few particles fall from the top.
+    const count = Math.min(7, Math.max(3, Math.round(Math.abs(e.deltaY) / 42)));
+    const bandHeight = Math.min(105, height * 0.16);
+    for (let i = 0; i < count; i++) {
+      const fromTop = direction < 0;
+      scrollParticles.push({
+        x: 22 + Math.random() * Math.max(1, width - 44),
+        y: fromTop ? Math.random() * bandHeight : height - Math.random() * bandHeight,
+        vx: (Math.random() - 0.5) * 0.28,
+        vy: fromTop ? 34 + Math.random() * 48 : -(34 + Math.random() * 48),
+        born: now,
+        life: 760 + Math.random() * 420,
+        glyph: [".", ":", "+", "*"][Math.floor(Math.random() * 4)],
+        size: 12 + Math.random() * 7
+      });
+    }
+    if (scrollParticles.length > 30) scrollParticles.splice(0, scrollParticles.length - 30);
+    schedule();
+  }, { passive: true });
   addEventListener("keydown", e => {
-    if (e.key === "Escape" && enabled) {
-      trail.length = 0; bursts.length = 0; lastPointer = null;
-      chrome.storage.local.set({ asciiFlowEnabled: false });
-      chrome.runtime.sendMessage({ type: "STOP_AUDIO_CAPTURE" }).catch(() => {});
-      setEnabled(false);
+    const tag = e.target?.tagName?.toLowerCase();
+    const typing = tag === "input" || tag === "textarea" || tag === "select" || e.target?.isContentEditable;
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "1" && !typing) {
+      e.preventDefault(); e.stopPropagation();
+      const next = !enabled;
+      chrome.storage.local.set({ asciiFlowEnabled: next });
+      setEnabled(next);
+      return;
     }
   });
 
@@ -296,13 +377,15 @@
 
   function rippleAt(c, now) {
     let amount = 0;
+    const duration = 1800;
+    const maxRadius = Math.hypot(width, height) + 80;
     for (const b of bursts) {
-      const t = (now - b.time) / 1050;
+      const t = (now - b.time) / duration;
       if (t < 0 || t > 1) continue;
       const distance = Math.hypot(c.x - b.x, c.y - b.y);
-      const radius = 18 + t * 350;
-      const ring = Math.max(0, 1 - Math.abs(distance - radius) / 82);
-      amount = Math.max(amount, ring * Math.pow(1 - t, 0.7));
+      const radius = 18 + t * maxRadius;
+      const ring = Math.max(0, 1 - Math.abs(distance - radius) / 100);
+      amount = Math.max(amount, ring * Math.pow(1 - t, 0.62));
     }
     return amount;
   }
@@ -330,35 +413,39 @@
       }
     }
 
-    const count = Math.max(24, Math.floor(width / 10));
+    // Keep the audio visual focused and compact, rather than stretching edge-to-edge.
+    const waveWidth = width * 0.78;
+    const waveLeft = (width - waveWidth) / 2;
+    const count = Math.max(18, Math.floor(waveWidth / 17));
     const baseline = height - Math.max(24, Math.min(38, height * 0.09));
-    const spacing = width / count;
+    const spacing = waveWidth / count;
     const glyphs = [".", ":", "+", "*", "#", "%", "@"];
     const peaks = beatPulses;
-    const cell = Math.max(9, Math.min(15, spacing * 0.9));
+    // Larger, readable glyphs closer to the normal mouse-trail character scale.
+    const cell = Math.max(17, Math.min(21, spacing * 1.08));
 
     for (let i = 0; i < count; i++) {
-      const x = spacing * i + spacing / 2;
+      const x = waveLeft + spacing * i + spacing / 2;
       const bandIndex = Math.min(47, Math.floor(i / count * 48));
       const spectrumLevel = spectrumSmooth[bandIndex] || 0;
-      let heightLevel = Math.pow(spectrumLevel, 0.82) * height * 0.49;
+      let heightLevel = Math.pow(spectrumLevel, 0.82) * height * 0.40;
 
       // A detected beat creates a waveform-shaped burst at one position.
       // The centre column rises highest; neighboring columns taper symmetrically.
       for (const beat of peaks) {
         const age = (now - beat.time) / 1000;
         if (age < 0 || age > 0.72) continue;
-        const centerX = beat.xRatio * width;
+        const centerX = waveLeft + beat.xRatio * waveWidth;
         const distance = Math.abs(x - centerX) / Math.max(1, spacing);
         const profile = Math.max(0, 1 - distance / 7);
         const stepped = [1, 0.82, 0.64, 0.46, 0.30, 0.18, 0.09][Math.min(6, Math.floor(distance))] || 0;
         const envelope = Math.exp(-age / 0.34) * Math.pow(Math.max(0, 1 - age / 0.72), 0.55);
-        heightLevel = Math.max(heightLevel, height * 0.52 * stepped * envelope);
+        heightLevel = Math.max(heightLevel, height * 0.44 * stepped * envelope);
       }
 
       // Smooth baseline movement and keep quiet columns visible.
       heightLevel = Math.max(2, Math.min(height * 0.48, heightLevel));
-      const rowsUp = Math.max(1, Math.floor(heightLevel / cell));
+      const rowsUp = Math.max(1, Math.floor(heightLevel / (cell * 1.12)));
       const hue = i / Math.max(1, count - 1);
       const color = hue < 0.5
         ? mix(theme.core, theme.mid, hue * 2)
@@ -385,6 +472,56 @@
     ctx.shadowBlur = 0;
   }
 
+
+  function drawAudioPointerLayer(field, theme) {
+    // Compact pointer accent designed to sit over the v2.9.4 waveform.
+    // It deliberately avoids the legacy full-screen mouse renderer.
+    const core = field.core, mid = field.mid, edge = field.edge;
+    const glyphs = [".", ":", "+", "*", "#", "%"];
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "15px ui-monospace, Consolas, monospace";
+    for (let i = 0; i < grid.length; i++) {
+      const c = grid[i];
+      const strength = Math.max(core[i], mid[i] * 0.72, edge[i] * 0.38);
+      if (strength < 0.10) continue;
+      const level = Math.min(1, strength);
+      const color = mix(theme.mid, theme.core, Math.min(1, core[i] * 1.15 + mid[i] * 0.25));
+      ctx.globalAlpha = Math.min(0.88, 0.12 + level * 0.72);
+      ctx.fillStyle = `rgb(${color.join(",")})`;
+      ctx.fillText(glyphs[Math.min(glyphs.length - 1, Math.floor(level * glyphs.length))], c.x, c.y);
+    }
+    ctx.restore();
+  }
+
+  function drawScrollParticles(now, theme) {
+    if (!scrollParticles.length) return;
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let i = scrollParticles.length - 1; i >= 0; i--) {
+      const particle = scrollParticles[i];
+      const age = now - particle.born;
+      if (age >= particle.life) {
+        scrollParticles.splice(i, 1);
+        continue;
+      }
+      const t = age / particle.life;
+      const fade = Math.sin(Math.PI * t) * 0.82;
+      particle.x += particle.vx * 0.016;
+      particle.y += particle.vy * 0.016;
+      const color = mix(theme.mid, theme.core, 0.45 + (1 - t) * 0.35);
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = `rgb(${color.join(",")})`;
+      ctx.font = `${particle.size}px ui-monospace, Consolas, monospace`;
+      ctx.shadowColor = `rgb(${color.join(",")})`;
+      ctx.shadowBlur = 7;
+      ctx.fillText(particle.glyph, particle.x, particle.y);
+    }
+    ctx.restore();
+  }
+
   function draw() {
     raf = 0;
     if (!enabled) return;
@@ -401,21 +538,22 @@
     lastFrame = now;
 
     while (trail.length && now - trail[0].time > (Number(settings.trailDuration) || 1050)) trail.shift();
-    for (let i = bursts.length - 1; i >= 0; i--) if (now - bursts[i].time > 1100) bursts.splice(i, 1);
+    for (let i = bursts.length - 1; i >= 0; i--) if (now - bursts[i].time > 1850) bursts.splice(i, 1);
     for (let i = audioWaves.length - 1; i >= 0; i--) if (now - audioWaves[i].time > 1700) audioWaves.splice(i, 1);
     for (let i = beatPulses.length - 1; i >= 0; i--) if (now - beatPulses[i].time > 850) beatPulses.splice(i, 1);
 
-    if (!trail.length && !bursts.length && !audioActive) {
-      if (dirty) drawIdle();
+    const theme = displayTheme(now);
+    if (audioActive) {
+      drawAudioWaveform(now, theme);
+      schedule();
+      return;
+    }
+    if (!trail.length && !bursts.length && !scrollParticles.length) {
+      if (!audioActive && dirty) drawIdle();
+      if (audioActive || smoothedBass > 0.008 || beatPulses.length) schedule();
       return;
     }
 
-    const theme = activeTheme();
-    if (audioActive) {
-      drawAudioWaveform(now, theme);
-      if (trail.length || bursts.length || audioActive || beatPulses.length) schedule();
-      return;
-    }
     const field = calculateInfluence(now);
     ctx.clearRect(0, 0, width, height);
     ctx.font = "900 21px 'Arial Rounded MT Bold', 'Trebuchet MS', monospace";
@@ -445,11 +583,24 @@
       color = mix(color, theme.core, Math.min(1, Math.max(a, ripple, pulse * 0.35, travellingWave, bassKick, beatSector)));
       const glyph = glyphFor(intensity, c.variation);
       const glow = Math.max(20, Math.min(120, Number(settings.glow) || 70)) / 70;
-      const alpha = Math.min(1, 0.16 + (d * 0.34 + b * 0.42 + a * 0.48 + ripple * 0.32 + audioIntensity * 0.55) * glow);
-      // Bright, saturated colour; restrained blur keeps edges crisp and avoids GPU-heavy bloom.
+      const alpha = Math.min(1, 0.16 + (d * 0.34 + b * 0.42 + a * 0.48 + ripple * 0.72 + audioIntensity * 0.55) * glow);
+      // Bright, saturated colour; ripple gets a soft luminous edge without 3D scaling.
       ctx.globalAlpha = alpha;
       ctx.fillStyle = `rgb(${color.join(",")})`;
-      if (ripple > 0.06 || audioIntensity > 0.12) {
+      if (ripple > 0.06) {
+        const rippleColor = mix(theme.mid, theme.core, Math.min(1, 0.38 + ripple * 0.72));
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, 0.34 + ripple * 0.82);
+        ctx.fillStyle = `rgb(${rippleColor.join(",")})`;
+        ctx.shadowColor = `rgb(${rippleColor.join(",")})`;
+        ctx.shadowBlur = 8 + ripple * 14;
+        // Two flat passes create a bright 2D neon ripple, not a raised/3D effect.
+        ctx.fillText(glyph === "." || glyph === ":" ? "+" : glyph, c.x, c.y);
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = Math.min(1, 0.52 + ripple * 0.48);
+        ctx.fillText(glyph, c.x, c.y);
+        ctx.restore();
+      } else if (audioIntensity > 0.12) {
         ctx.save();
         const pop = Math.max(ripple, travellingWave * 0.72, pulse * 0.48, bassKick, beatSector * 1.35);
         const scale = 1 + pop * 1.28 + a * 0.12;
@@ -462,8 +613,9 @@
         ctx.fillText(glyph, c.x, c.y);
       }
     }
+    drawScrollParticles(now, theme);
     ctx.globalAlpha = 1;
-    if (trail.length || bursts.length || audioActive || smoothedBass > 0.008 || beatPulses.length) schedule();
+    if (trail.length || bursts.length || scrollParticles.length || audioActive || smoothedBass > 0.008 || beatPulses.length) schedule();
   }
 
   addEventListener("resize", resize, { passive: true });
